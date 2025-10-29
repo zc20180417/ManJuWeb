@@ -26,7 +26,10 @@ export default function ScriptWriter() {
   const DOUBAO_1_6_THINKING = 'doubao1-6-thinking';
   const DOUBAO_1_6_FLASH = 'doubao1-6-flash';
   const GPT_4 = 'gpt4';
+  const SORA_2 = 'sora2'
 
+  //测试sora2
+  const SORA2_API_ENDPOINT = 'https://api.bltcy.ai/v2/videos/generations';
 
   // 添加AI模型选择
   const [aiModels] = useState([
@@ -35,7 +38,8 @@ export default function ScriptWriter() {
     { id: GPT_4, name: 'GPT-4', apiEndpoint: 'https://api.bltcy.ai/v1/chat/completions' },
     { id: 'claude3', name: 'Claude 3', apiEndpoint: 'https://api.anthropic.com/v1/messages' },
     { id: 'gemini', name: 'Gemini Pro', apiEndpoint: 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent' },
-    { id: 'tongyi', name: '通义千问', apiEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation' }
+    { id: 'tongyi', name: '通义千问', apiEndpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation' },
+    { id: SORA_2, name: 'sora2', apiEndpoint: SORA2_API_ENDPOINT },
   ]);
   const [selectedModel, setSelectedModel] = useState(DOUBAO_1_6_FLASH);
   const [showAPIKeyModal, setShowAPIKeyModal] = useState(false);
@@ -156,6 +160,8 @@ export default function ScriptWriter() {
       });
     }
   };
+
+
 
   // 真实API调用实现（增强版）
   const realApiCall = async (model: string, novelText: string, projectTitle: string): Promise<void> => {

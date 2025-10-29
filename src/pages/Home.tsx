@@ -178,7 +178,7 @@ export default function Home() {
         </motion.div>
         
         {/* 功能展示卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 max-w-7xl mx-auto w-full">
            {[
             {
               icon: 'fa-file-alt',
@@ -207,6 +207,13 @@ export default function Home() {
               description: '将生成的图像合成为流畅的动态视频',
               color: 'from-amber-500 to-orange-600',
               link: '/video-creator'
+            },
+            {
+              icon: 'fa-film',
+              title: '文生视频',
+              description: '直接将文本描述转换为AI生成视频',
+              color: 'from-pink-500 to-rose-600',
+              link: '/text-to-video'
             }
           ].map((feature, index) => (
             <motion.div
@@ -255,6 +262,7 @@ export default function Home() {
                 <li><Link to="/storyboard" className="hover:text-purple-500 transition-colors">分镜设计</Link></li>
                 <li><Link to="/image-generator" className="hover:text-purple-500 transition-colors">图像生成</Link></li>
                 <li><Link to="/video-creator" className="hover:text-purple-500 transition-colors">视频合成</Link></li>
+                <li><Link to="/text-to-video" className="hover:text-purple-500 transition-colors">文生视频</Link></li>
               </ul>
             </div>
             
