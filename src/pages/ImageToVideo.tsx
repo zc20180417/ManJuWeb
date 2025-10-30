@@ -8,29 +8,33 @@ import { AuthContext } from '@/contexts/authContext';
 interface VideoHistory {
   id: string;
   prompt: string;
+  firstFrame: string;
+  lastFrame: string;
   videoUrl: string;
   aspectRatio: string;
   hd: boolean;
   duration: string;
-  enhancePrompt: boolean; // VEO3特有参数
-  enableUpsample: boolean; // VEO3特有参数
-  model: string; // 添加模型信息
-  sora2SubModel: string; // Sora2子模型
-  veo3SubModel: string; // VEO3子模型
+  enhancePrompt: boolean;
+  model: string;
+  sora2SubModel: string;
+  veo3SubModel: string;
+  watermark: boolean;
   createdAt: Date;
 }
 
-export default function TextToVideo() {
+export default function ImageToVideo() {
   const { isDark } = useTheme();
   const { apiKeys, setApiKey } = useContext(AuthContext);
   
-  const [inputText, setInputText] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [firstFrame, setFirstFrame] = useState('');
+  const [lastFrame, setLastFrame] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [showAPIKeyModal, setShowAPIKeyModal] = useState(false);
   const [currentApiKeyInput, setCurrentApiKeyInput] = useState('');
   const [taskId, setTaskId] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0); // 改为数字类型
+  const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<VideoHistory[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
   
@@ -38,12 +42,12 @@ export default function TextToVideo() {
   const [aspectRatio, setAspectRatio] = useState('16:9');
   const [hd, setHd] = useState(false);
   const [duration, setDuration] = useState('10');
-  const [enhancePrompt, setEnhancePrompt] = useState(true); // VEO3特有参数
-  const [enableUpsample, setEnableUpsample] = useState(true); // VEO3特有参数
+  const [enhancePrompt, setEnhancePrompt] = useState(true);
+  const [watermark, setWatermark] = useState(false);
   const [sora2SubModel, setSora2SubModel] = useState('sora-2'); // Sora2子模型
   const [veo3SubModel, setVeo3SubModel] = useState('veo3.1'); // VEO3子模型
   
-  // Sora2 和 VEO3 模型配置
+  // 模型配置
   const SORA2_MODEL = 'sora2';
   const VEO3_MODEL = 'veo3';
   const SORA2_API_ENDPOINT = 'https://api.bltcy.ai/v2/videos/generations';
@@ -60,14 +64,16 @@ export default function TextToVideo() {
 
   // 页面加载时从localStorage加载历史记录
   useEffect(() => {
-    const savedHistory = localStorage.getItem('text-to-video-history');
+    const savedHistory = localStorage.getItem('image-to-video-history');
     if (savedHistory) {
       try {
         const parsedHistory = JSON.parse(savedHistory);
         // 转换日期字符串为Date对象，并清理URL中的空格
         const historyWithDates = parsedHistory.map((item: any) => ({
           ...item,
-          videoUrl: item.videoUrl.replace(/\s/g, ''), // 清理URL中的空格
+          firstFrame: item.firstFrame?.replace(/\s/g, '') || '',
+          lastFrame: item.lastFrame?.replace(/\s/g, '') || '',
+          videoUrl: item.videoUrl?.replace(/\s/g, '') || '',
           createdAt: new Date(item.createdAt)
         }));
         setVideoHistory(historyWithDates);
@@ -79,26 +85,30 @@ export default function TextToVideo() {
 
   // 保存历史记录到localStorage
   const saveHistoryToLocalStorage = (history: VideoHistory[]) => {
-    localStorage.setItem('text-to-video-history', JSON.stringify(history));
+    localStorage.setItem('image-to-video-history', JSON.stringify(history));
   };
 
   // 添加新生成的视频到历史记录
-  const addToHistory = (prompt: string, url: string) => {
+  const addToHistory = (prompt: string, firstFrame: string, lastFrame: string, url: string) => {
     // 清理URL中的空格
-    const cleanedUrl = url.replace(/\s/g, '');
+    const cleanedFirstFrame = firstFrame?.replace(/\s/g, '') || '';
+    const cleanedLastFrame = lastFrame?.replace(/\s/g, '') || '';
+    const cleanedUrl = url?.replace(/\s/g, '') || '';
     
     const newHistoryItem: VideoHistory = {
       id: Date.now().toString(),
       prompt,
+      firstFrame: cleanedFirstFrame,
+      lastFrame: cleanedLastFrame,
       videoUrl: cleanedUrl,
       aspectRatio,
       hd,
       duration,
-      enhancePrompt, // VEO3特有参数
-      enableUpsample, // VEO3特有参数
-      model: selectedModel, // 保存模型信息
-      sora2SubModel, // 保存Sora2子模型
-      veo3SubModel, // 保存VEO3子模型
+      enhancePrompt,
+      model: selectedModel,
+      sora2SubModel,
+      veo3SubModel,
+      watermark,
       createdAt: new Date()
     };
     
@@ -117,8 +127,13 @@ export default function TextToVideo() {
 
   // 生成视频
   const handleGenerateVideo = async () => {
-    if (!inputText.trim()) {
-      toast.error('请输入文本内容');
+    if (!prompt.trim()) {
+      toast.error('请输入提示词');
+      return;
+    }
+
+    if (!firstFrame.trim()) {
+      toast.error('请上传首帧图片');
       return;
     }
 
@@ -145,8 +160,8 @@ export default function TextToVideo() {
     });
 
     try {
-      // 调用真实的Sora2 API 或 VEO3 API
-      await callSora2Api();
+      // 调用图生视频API
+      await callImageToVideoApi();
     } catch (error) {
       setIsGenerating(false);
       
@@ -156,8 +171,81 @@ export default function TextToVideo() {
     }
   };
 
-  // 调用真实的Sora2 API 或 VEO3 API
-  const callSora2Api = async (): Promise<void> => {
+  // 将文件转换为base64
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          // 保留完整的base64数据URL，包括前缀
+          resolve(reader.result);
+        } else {
+          reject(new Error('文件读取失败'));
+        }
+      };
+      reader.onerror = error => reject(error);
+    });
+  };
+
+  // 处理首帧图片上传
+  const handleFirstFrameUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      toast.error('请选择图片文件');
+      return;
+    }
+
+    // 检查文件大小（限制为10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('图片文件大小不能超过10MB');
+      return;
+    }
+
+    try {
+      const base64 = await fileToBase64(file);
+      setFirstFrame(base64);
+      toast.success('首帧图片上传成功');
+    } catch (error) {
+      toast.error('图片上传失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  // 处理尾帧图片上传
+  const handleLastFrameUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      // 如果没有选择文件，清空尾帧
+      setLastFrame('');
+      return;
+    }
+
+    // 检查文件类型
+    if (!file.type.startsWith('image/')) {
+      toast.error('请选择图片文件');
+      return;
+    }
+
+    // 检查文件大小（限制为10MB）
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('图片文件大小不能超过10MB');
+      return;
+    }
+
+    try {
+      const base64 = await fileToBase64(file);
+      setLastFrame(base64);
+      toast.success('尾帧图片上传成功');
+    } catch (error) {
+      toast.error('图片上传失败: ' + (error instanceof Error ? error.message : '未知错误'));
+    }
+  };
+
+  // 调用图生视频API
+  const callImageToVideoApi = async (): Promise<void> => {
     const apiKey = apiKeys[selectedModel];
     
     if (!apiKey) {
@@ -170,11 +258,18 @@ export default function TextToVideo() {
 
     let raw;
     
+    // 构造images数组，首帧是必需的，尾帧是可选的
+    const images = [firstFrame];
+    if (lastFrame) {
+      images.push(lastFrame);
+    }
+    
     // 根据选择的模型构造不同的请求体
     if (selectedModel === SORA2_MODEL) {
       const requestBody: any = {
-        "prompt": inputText,
-        "model": sora2SubModel, // 使用子模型
+        "prompt": prompt,
+        "model": sora2SubModel,
+        "images": images, // 使用base64数据
         "aspect_ratio": aspectRatio
       };
       
@@ -182,20 +277,17 @@ export default function TextToVideo() {
       if (sora2SubModel === 'sora-2-pro') {
         requestBody.hd = hd;
         requestBody.duration = duration;
-      } else if (sora2SubModel === 'sora-2') {
-        requestBody.hd = false;
-        requestBody.duration = duration;
+        requestBody.watermark = watermark;
       }
-      // sora-2 不支持 hd 和 duration 参数
+      // sora-2 不支持 hd、duration 和 watermark 参数
       
       raw = JSON.stringify(requestBody);
     } else if (selectedModel === VEO3_MODEL) {
       raw = JSON.stringify({
-        "prompt": inputText,
-        "model": veo3SubModel, // 使用VEO3子模型
-        "aspect_ratio": aspectRatio,
+        "prompt": prompt,
+        "model": veo3SubModel,
         "enhance_prompt": enhancePrompt,
-        "enable_upsample": enableUpsample
+        "images": images // 使用base64数据
       });
     }
 
@@ -278,7 +370,7 @@ export default function TextToVideo() {
               // 清理URL中的空格
               const cleanedUrl = result.data.output.replace(/\s/g, '');
               setVideoUrl(cleanedUrl);
-              addToHistory(inputText, cleanedUrl); // 添加到历史记录
+              addToHistory(prompt, firstFrame, lastFrame, cleanedUrl); // 添加到历史记录
               setIsGenerating(false);
               if (intervalId) clearInterval(intervalId);
               setTaskId(null); // 清除taskId，防止重复触发
@@ -306,7 +398,7 @@ export default function TextToVideo() {
         clearInterval(intervalId);
       }
     };
-  }, [taskId, apiKeys, selectedModel]); // 简化依赖数组，只保留必要的依赖项
+  }, [taskId, apiKeys, selectedModel, prompt, firstFrame, lastFrame]); // 更新依赖数组
 
   // 下载视频
   const handleDownloadVideo = async () => {
@@ -353,18 +445,22 @@ export default function TextToVideo() {
     const selectedVideo = videoHistory.find(video => video.id === videoId);
     if (selectedVideo) {
       // 清理URL中的空格
-      const cleanedUrl = selectedVideo.videoUrl.replace(/\s/g, '');
+      const cleanedFirstFrame = selectedVideo.firstFrame?.replace(/\s/g, '') || '';
+      const cleanedLastFrame = selectedVideo.lastFrame?.replace(/\s/g, '') || '';
+      const cleanedUrl = selectedVideo.videoUrl?.replace(/\s/g, '') || '';
       
+      setPrompt(selectedVideo.prompt);
+      setFirstFrame(cleanedFirstFrame);
+      setLastFrame(cleanedLastFrame);
       setVideoUrl(cleanedUrl);
-      setInputText(selectedVideo.prompt);
       setAspectRatio(selectedVideo.aspectRatio);
       setHd(selectedVideo.hd);
       setDuration(selectedVideo.duration);
-      setEnhancePrompt(selectedVideo.enhancePrompt); // VEO3特有参数
-      setEnableUpsample(selectedVideo.enableUpsample); // VEO3特有参数
-      setSelectedModel(selectedVideo.model); // 设置模型
-      setSora2SubModel(selectedVideo.sora2SubModel); // 设置Sora2子模型
-      setVeo3SubModel(selectedVideo.veo3SubModel); // 设置VEO3子模型
+      setEnhancePrompt(selectedVideo.enhancePrompt);
+      setSelectedModel(selectedVideo.model);
+      setSora2SubModel(selectedVideo.sora2SubModel);
+      setVeo3SubModel(selectedVideo.veo3SubModel);
+      setWatermark(selectedVideo.watermark);
       setSelectedHistoryId(videoId);
       toast.info('已从历史记录加载视频');
     }
@@ -382,7 +478,7 @@ export default function TextToVideo() {
             <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-600 to-blue-500 flex items-center justify-center">
               <i className="fas fa-video text-white"></i>
             </div>
-            <h1 className="text-xl font-bold">文生视频</h1>
+            <h1 className="text-xl font-bold">图生视频</h1>
           </div>
           
           <div className="flex items-center space-x-4">
@@ -432,11 +528,11 @@ export default function TextToVideo() {
         )}
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* 文本输入区域 */}
+          {/* 输入区域 */}
           <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg overflow-hidden`}>
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold">文本输入</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">输入描述文本，AI将根据内容生成视频</p>
+              <h2 className="text-xl font-bold">图生视频</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">上传首帧和尾帧图片，AI将根据内容生成视频</p>
             </div>
             
             <div className="p-6">
@@ -494,7 +590,7 @@ export default function TextToVideo() {
                 </motion.button>
               </div>
 
-              {/* 子模型选择区域 - 独立一行显示 */}
+              {/* 子模型选择区域 */}
               {(selectedModel === SORA2_MODEL || selectedModel === VEO3_MODEL) && (
                 <div className={`mb-6 p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
                   <h3 className="font-medium mb-3">子模型选择</h3>
@@ -583,7 +679,105 @@ export default function TextToVideo() {
               {/* 参数设置区域 */}
               <div className={`mb-6 p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
                 <h3 className="font-medium mb-3">视频参数设置</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* 提示词输入 */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-2">提示词</label>
+                    <textarea
+                      value={prompt}
+                      onChange={(e) => setPrompt(e.target.value)}
+                      className={`w-full p-3 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'} border focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none`}
+                      placeholder="请输入提示词，描述你想要生成的视频内容..."
+                      rows={3}
+                    ></textarea>
+                  </div>
+                  
+                  {/* 图片URL输入 */}
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-2">图片上传</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 图片上传区域 - 首帧 */}
+                      <div className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors relative overflow-hidden ${
+                        isDark 
+                          ? 'border-gray-600 hover:border-purple-500 bg-gray-800' 
+                          : 'border-gray-300 hover:border-purple-400 bg-gray-50'
+                      }`}
+                      onClick={() => document.getElementById('first-frame-upload')?.click()}
+                      >
+                        <input
+                          id="first-frame-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFirstFrameUpload}
+                          className="hidden"
+                        />
+                        {firstFrame ? (
+                          <div className="flex flex-col items-center w-full h-full">
+                            <img 
+                              src={firstFrame} 
+                              alt="首帧图片" 
+                              className="max-w-full max-h-32 object-contain mb-2"
+                            />
+                            <p className="text-sm">首帧图片已上传</p>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-2">
+                              <i className="fas fa-upload text-gray-500 dark:text-gray-400"></i>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">点击上传首帧图片</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">支持 JPG, PNG 格式，最大10MB</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* 图片上传区域 - 尾帧（可选） */}
+                      <div className={`border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-colors relative overflow-hidden ${
+                        isDark 
+                          ? 'border-gray-600 hover:border-purple-500 bg-gray-800' 
+                          : 'border-gray-300 hover:border-purple-400 bg-gray-50'
+                      }`}
+                      onClick={() => document.getElementById('last-frame-upload')?.click()}
+                      >
+                        <input
+                          id="last-frame-upload"
+                          type="file"
+                          accept="image/*"
+                          onChange={handleLastFrameUpload}
+                          className="hidden"
+                        />
+                        {lastFrame ? (
+                          <div className="flex flex-col items-center w-full h-full">
+                            <img 
+                              src={lastFrame} 
+                              alt="尾帧图片" 
+                              className="max-w-full max-h-32 object-contain mb-2"
+                            />
+                            <p className="text-sm">尾帧图片已上传</p>
+                            <button 
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLastFrame('');
+                              }}
+                              className="mt-1 text-xs text-red-500 hover:text-red-700"
+                            >
+                              移除
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col items-center">
+                            <div className="w-12 h-12 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center mb-2">
+                              <i className="fas fa-plus text-gray-500 dark:text-gray-400"></i>
+                            </div>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">点击上传尾帧图片（可选）</p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">支持 JPG, PNG 格式，最大10MB</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
                   {/* 画面比例选择 */}
                   <div>
                     <label className="block text-sm font-medium mb-2">画面比例</label>
@@ -608,6 +802,18 @@ export default function TextToVideo() {
                       >
                         9:16
                       </button>
+                      {selectedModel !== SORA2_MODEL && (
+                        <button
+                          onClick={() => setAspectRatio('1:1')}
+                          className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
+                            aspectRatio === '1:1'
+                              ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
+                              : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                          }`}
+                        >
+                          1:1
+                        </button>
+                      )}
                     </div>
                   </div>
                   
@@ -630,6 +836,43 @@ export default function TextToVideo() {
                                 }`}
                               >
                                 10
+                              </button>
+                              <button
+                                onClick={() => setDuration('15')}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
+                                  duration === '15'
+                                    ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
+                                    : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                15
+                              </button>
+                            </div>
+                          </div>
+                          
+                          {/* 水印选项 - 仅sora-2支持 */}
+                          <div>
+                            <label className="block text-sm font-medium mb-2">水印</label>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => setWatermark(true)}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
+                                  watermark
+                                    ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
+                                    : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                开启
+                              </button>
+                              <button
+                                onClick={() => setWatermark(false)}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
+                                  !watermark
+                                    ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
+                                    : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                关闭
                               </button>
                             </div>
                           </div>
@@ -661,11 +904,6 @@ export default function TextToVideo() {
                                 关闭
                               </button>
                             </div>
-                            {duration === '25' && (
-                              <p className="text-xs text-amber-500 dark:text-amber-400 mt-1">
-                                提示：当时长为25秒时，高清选项将不起作用
-                              </p>
-                            )}
                           </div>
                           
                           {/* 时长选择 - sora-2-pro 特有 */}
@@ -692,15 +930,32 @@ export default function TextToVideo() {
                               >
                                 15
                               </button>
+                            </div>
+                          </div>
+                          
+                          {/* 水印选项 - sora-2-pro 特有 */}
+                          <div>
+                            <label className="block text-sm font-medium mb-2">水印</label>
+                            <div className="flex gap-2">
                               <button
-                                onClick={() => setDuration('25')}
+                                onClick={() => setWatermark(true)}
                                 className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
-                                  duration === '25'
+                                  watermark
                                     ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
                                     : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
                                 }`}
                               >
-                                25
+                                开启
+                              </button>
+                              <button
+                                onClick={() => setWatermark(false)}
+                                className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
+                                  !watermark
+                                    ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
+                                    : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
+                                }`}
+                              >
+                                关闭
                               </button>
                             </div>
                           </div>
@@ -709,9 +964,9 @@ export default function TextToVideo() {
                     </>
                   ) : (
                     <>
-                      {/* 增强提示 - VEO3 特有 */}
+                      {/* 提示词增强 - VEO3 特有 */}
                       <div>
-                        <label className="block text-sm font-medium mb-2">增强提示</label>
+                        <label className="block text-sm font-medium mb-2">提示词增强</label>
                         <div className="flex gap-2">
                           <button
                             onClick={() => setEnhancePrompt(true)}
@@ -735,117 +990,130 @@ export default function TextToVideo() {
                           </button>
                         </div>
                       </div>
-                      
-                      {/* 超分辨率 - VEO3 特有 */}
-                      <div>
-                        <label className="block text-sm font-medium mb-2">超分辨率</label>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => setEnableUpsample(true)}
-                            className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
-                              enableUpsample
-                                ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
-                                : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
-                            }`}
-                          >
-                            开启
-                          </button>
-                          <button
-                            onClick={() => setEnableUpsample(false)}
-                            className={`flex-1 py-2 px-3 rounded-lg text-sm transition-colors ${
-                              !enableUpsample
-                                ? isDark ? 'bg-purple-600 text-white' : 'bg-purple-500 text-white'
-                                : isDark ? 'bg-gray-600 text-gray-200' : 'bg-gray-200 text-gray-700'
-                            }`}
-                          >
-                            关闭
-                          </button>
-                        </div>
-                      </div>
                     </>
                   )}
                 </div>
               </div>
-
-              <textarea
-                value={inputText}
-                onChange={(e) => setInputText(e.target.value)}
-                className={`w-full h-64 p-4 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'} border focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none`}
-                placeholder="请输入视频描述文本，例如：一个美丽的日落场景，海浪轻拍着沙滩..."
-                spellCheck={false}
-              ></textarea>
               
-              <div className={`mt-4 p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'} shadow-sm`}>
-                <h3 className="text-sm font-medium mb-2">使用提示：</h3>
-                <ul className="text-sm space-y-1 list-disc pl-5 text-gray-600 dark:text-gray-300">
-                  <li>输入详细的描述文本可以获得更好的视频生成效果</li>
-                  <li>建议描述包含场景、动作、氛围等元素</li>
-                  <li>需要设置Sora2模型的API密钥才能使用生成功能</li>
-                  <li>API密钥仅保存在您的浏览器本地，确保安全</li>
-                </ul>
-              </div>
+              {/* 进度条显示 */}
+              {isGenerating && (
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>视频生成中...</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className={`w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      transition={{ duration: 0.5 }}
+                    ></motion.div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    视频生成可能需要几分钟时间，请耐心等待...
+                  </p>
+                </div>
+              )}
             </div>
           </div>
           
-          {/* 视频展示区域 */}
+          {/* 预览区域 */}
           <div className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg overflow-hidden`}>
             <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-xl font-bold">视频展示</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">生成的视频将在此处展示</p>
+              <h2 className="text-xl font-bold">视频预览</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">生成的视频将在此处显示</p>
             </div>
             
             <div className="p-6">
-              <div className="relative rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-700 aspect-video flex items-center justify-center">
-                {isGenerating ? (
-                  <div className="flex flex-col items-center">
-                    <div className="w-16 h-16 rounded-full border-4 border-t-purple-500 border-r-transparent border-b-purple-500 border-l-transparent animate-spin mb-4"></div>
-                    <p className="text-lg font-medium">正在生成视频...</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">这可能需要几分钟时间</p>
-                    {taskId && (
-                      <div className="mt-4 w-full max-w-md">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span>处理中...</span>
-                          <span>{progress}%</span>
-                        </div>
-                        <div className={`w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                          <motion.div 
-                            className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
-                            initial={{ width: 0 }}
-                            animate={{ width: `${progress}%` }}
-                            transition={{ duration: 0.3 }}
-                          ></motion.div>
-                        </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center">
-                          任务ID: {taskId}
-                        </p>
+              {videoUrl ? (
+                <div className="space-y-4">
+                  <div className="aspect-video bg-black rounded-lg overflow-hidden">
+                    <video
+                      src={videoUrl}
+                      controls
+                      className="w-full h-full object-contain"
+                      onError={(e) => {
+                        console.error('视频加载失败:', e);
+                        toast.error('视频加载失败，请尝试重新生成');
+                      }}
+                    />
+                  </div>
+                  
+                  {selectedHistory && (
+                    <div className={`rounded-lg p-4 ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
+                      <h3 className="font-medium mb-2">视频信息</h3>
+                      <div className="text-sm space-y-1">
+                        <p><span className="font-medium">模型:</span> {selectedHistory.model === SORA2_MODEL ? 'Sora2' : 'VEO3'} ({selectedHistory.model === SORA2_MODEL ? selectedHistory.sora2SubModel : selectedHistory.veo3SubModel})</p>
+                        <p><span className="font-medium">提示词:</span> {selectedHistory.prompt}</p>
+                        <p><span className="font-medium">画面比例:</span> {selectedHistory.aspectRatio}</p>
+                        <p><span className="font-medium">生成时间:</span> {new Date(selectedHistory.createdAt).toLocaleString()}</p>
+                        {selectedHistory.model === SORA2_MODEL && selectedHistory.sora2SubModel === 'sora-2-pro' && (
+                          <>
+                            <p><span className="font-medium">高清:</span> {selectedHistory.hd ? '是' : '否'}</p>
+                            <p><span className="font-medium">时长:</span> {selectedHistory.duration}秒</p>
+                            <p><span className="font-medium">水印:</span> {selectedHistory.watermark ? '是' : '否'}</p>
+                          </>
+                        )}
+                        {selectedHistory.model === VEO3_MODEL && (
+                          <p><span className="font-medium">提示词增强:</span> {selectedHistory.enhancePrompt ? '是' : '否'}</p>
+                        )}
                       </div>
-                    )}
+                    </div>
+                  )}
+                </div>
+              ) : firstFrame || lastFrame ? (
+                <div className="space-y-6">
+                  {/* 首帧和尾帧图片预览 */}
+                  <div>
+                    <h3 className="font-medium mb-2">上传的图片</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* 首帧图片预览 */}
+                      {firstFrame && (
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center p-4">
+                          <div className="flex flex-col items-center w-full">
+                            <img 
+                              src={firstFrame} 
+                              alt="首帧图片" 
+                              className="max-w-full max-h-32 object-contain mb-2"
+                            />
+                            <p className="text-sm">首帧图片</p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* 尾帧图片预览 */}
+                      {lastFrame && (
+                        <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center p-4">
+                          <div className="flex flex-col items-center w-full">
+                            <img 
+                              src={lastFrame} 
+                              alt="尾帧图片" 
+                              className="max-w-full max-h-32 object-contain mb-2"
+                            />
+                            <p className="text-sm">尾帧图片</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                ) : videoUrl ? (
-                  <video
-                    className="w-full h-full object-contain"
-                    controls
-                    autoPlay
-                    loop
-                  >
-                    <source src={videoUrl} type="video/mp4" />
-                    您的浏览器不支持视频播放
-                  </video>
-                ) : (
+                  
+                  {isGenerating && (
+                    <div className="text-center py-8">
+                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500 mb-3"></div>
+                      <p className="text-gray-500 dark:text-gray-400">正在生成视频...</p>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className={`aspect-video rounded-lg flex flex-col items-center justify-center ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
                   <div className="text-center p-8">
-                    <i className={`fas fa-video-slash text-4xl mb-4 ${isDark ? 'text-gray-600' : 'text-gray-400'}`}></i>
-                    <p className={`text-lg ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>尚未生成视频</p>
-                    <p className={`text-sm mt-2 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>在左侧输入文本并点击"生成视频"按钮开始</p>
-                  </div>
-                )}
-              </div>
-              
-              {videoUrl && !isGenerating && (
-                <div className="mt-6">
-                  <h3 className="font-medium mb-2">视频信息</h3>
-                  <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                    <p className="text-sm break-all">
-                      <span className="font-medium">视频URL:</span> {videoUrl.replace(/\s/g, '')}
+                    <div className="w-16 h-16 rounded-full bg-gray-200 dark:bg-gray-600 flex items-center justify-center mx-auto mb-4">
+                      <i className={`fas fa-video ${isDark ? 'text-gray-400' : 'text-gray-500'}`}></i>
+                    </div>
+                    <h3 className="text-lg font-medium mb-2">等待生成视频</h3>
+                    <p className="text-gray-500 dark:text-gray-400 max-w-md">
+                      上传首帧和尾帧图片，输入提示词，然后点击"生成视频"按钮开始创建视频内容
                     </p>
                   </div>
                 </div>
@@ -857,62 +1125,46 @@ export default function TextToVideo() {
       
       {/* API密钥设置模态框 */}
       {showAPIKeyModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.3 }}
-            className={`w-full max-w-md rounded-xl ${isDark ? 'bg-gray-800' : 'bg-white'} shadow-2xl overflow-hidden`}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`${isDark ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl max-w-md w-full p-6`}
           >
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-xl font-bold">设置{aiModels.find(m => m.id === selectedModel)?.name || selectedModel} API密钥</h3>
-              {aiModels.find(m => m.id === selectedModel)?.apiEndpoint && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                  API端点: {aiModels.find(m => m.id === selectedModel)?.apiEndpoint}
-                </p>
-              )}
-            </div>
+            <h2 className="text-xl font-bold mb-4">设置API密钥</h2>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">
+              请输入 {aiModels.find(m => m.id === selectedModel)?.name || selectedModel} 的API密钥
+            </p>
             
-            <div className="p-6">
-              <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">API密钥</label>
-                <input
-                  type="password"
-                  placeholder={`请输入${aiModels.find(m => m.id === selectedModel)?.name || selectedModel}的API密钥`}
-                  value={currentApiKeyInput}
-                  onChange={(e) => setCurrentApiKeyInput(e.target.value)}
-                  className={`w-full p-3 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'} border focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
-                  autoFocus
-                />
-              </div>
-              
-              <div className={`mb-6 p-3 rounded-lg ${isDark ? 'bg-gray-700' : 'bg-gray-50'}`}>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  <i className="fas fa-info-circle mr-2"></i>
-                  API密钥将安全保存在您的浏览器本地，不会上传到我们的服务器。
-                </p>
-                <p className="text-sm text-amber-500 dark:text-amber-400 mt-2">
-                  <i className="fas fa-exclamation-triangle mr-2"></i>
-                  请确保您输入的API密钥正确，错误的密钥将导致视频生成失败。
-                </p>
-              </div>
-              
-              <div className="flex justify-end gap-3">
-                <button
-                  onClick={() => setShowAPIKeyModal(false)}
-                  className={`px-4 py-2 rounded-lg ${isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-100 hover:bg-gray-200'} transition-colors`}
-                >
-                  取消
-                </button>
-                
-                <button
-                  onClick={handleSaveApiKey}
-                  className={`px-4 py-2 rounded-lg bg-gradient-to-r from-purple-600 to-blue-500 text-white transition-colors`}
-                >
-                  保存
-                </button>
-              </div>
+            <input
+              type="password"
+              value={currentApiKeyInput}
+              onChange={(e) => setCurrentApiKeyInput(e.target.value)}
+              className={`w-full p-3 rounded-lg mb-4 ${
+                isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-200'
+              } border focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
+              placeholder="输入API密钥"
+            />
+            
+            <div className="flex gap-3">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => setShowAPIKeyModal(false)}
+                className={`p-3 rounded-lg ${
+                  isDark ? 'bg-gray-700 hover:bg-gray-600' : 'bg-gray-200 hover:bg-gray-300'
+                } transition-colors`}
+              >
+                取消
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleSaveApiKey}
+                className={`p-3 rounded-lg bg-gradient-to-r from-purple-600 to-blue-500 text-white transition-colors`}
+              >
+                保存
+              </motion.button>
             </div>
           </motion.div>
         </div>

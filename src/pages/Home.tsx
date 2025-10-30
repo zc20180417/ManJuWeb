@@ -178,7 +178,7 @@ export default function Home() {
         </motion.div>
         
         {/* 功能展示卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 max-w-7xl mx-auto w-full">
            {[
             {
               icon: 'fa-file-alt',
@@ -214,6 +214,13 @@ export default function Home() {
               description: '直接将文本描述转换为AI生成视频',
               color: 'from-pink-500 to-rose-600',
               link: '/text-to-video'
+            },
+            {
+              icon: 'fa-photo-video',
+              title: '图生视频',
+              description: '将图片转换为动态视频内容',
+              color: 'from-teal-500 to-cyan-600',
+              link: '/image-to-video'
             }
           ].map((feature, index) => (
             <motion.div
@@ -263,6 +270,7 @@ export default function Home() {
                 <li><Link to="/image-generator" className="hover:text-purple-500 transition-colors">图像生成</Link></li>
                 <li><Link to="/video-creator" className="hover:text-purple-500 transition-colors">视频合成</Link></li>
                 <li><Link to="/text-to-video" className="hover:text-purple-500 transition-colors">文生视频</Link></li>
+                <li><Link to="/image-to-video" className="hover:text-purple-500 transition-colors">图生视频</Link></li>
               </ul>
             </div>
             
