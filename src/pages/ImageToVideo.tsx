@@ -37,6 +37,7 @@ export default function ImageToVideo() {
   const [progress, setProgress] = useState(0);
   const [videoHistory, setVideoHistory] = useState<VideoHistory[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [hasError, setHasError] = useState(false); // 添加错误状态
   
   // 新增的状态变量
   const [aspectRatio, setAspectRatio] = useState('16:9');
@@ -115,6 +116,7 @@ export default function ImageToVideo() {
     const updatedHistory = [newHistoryItem, ...videoHistory.slice(0, 9)]; // 保留最近10条记录
     setVideoHistory(updatedHistory);
     saveHistoryToLocalStorage(updatedHistory);
+    setHasError(false); // 重置错误状态
   };
 
   // 处理API密钥保存
@@ -122,6 +124,7 @@ export default function ImageToVideo() {
     setApiKey(selectedModel, currentApiKeyInput);
     setShowAPIKeyModal(false);
     setCurrentApiKeyInput('');
+    setHasError(false); // 重置错误状态
     toast.success(`${aiModels.find(m => m.id === selectedModel)?.name || selectedModel} API密钥已保存`);
   };
 
@@ -152,6 +155,7 @@ export default function ImageToVideo() {
     setVideoUrl('');
     setTaskId(null);
     setProgress(0);
+    setHasError(false); // 重置错误状态
     const modelName = aiModels.find(m => m.id === selectedModel)?.name || selectedModel;
     
     toast(`正在使用${modelName}生成视频...`, {
@@ -164,6 +168,8 @@ export default function ImageToVideo() {
       await callImageToVideoApi();
     } catch (error) {
       setIsGenerating(false);
+      setTaskId(null); // 清除taskId，确保显示错误信息
+      setHasError(true); // 设置错误状态
       
       toast.error(`视频生成失败: ${error instanceof Error ? error.message : '未知错误'}`, {
         duration: 5000
@@ -372,21 +378,24 @@ export default function ImageToVideo() {
               setVideoUrl(cleanedUrl);
               addToHistory(prompt, firstFrame, lastFrame, cleanedUrl); // 添加到历史记录
               setIsGenerating(false);
+              setHasError(false); // 重置错误状态
               if (intervalId) clearInterval(intervalId);
               setTaskId(null); // 清除taskId，防止重复触发
               toast.success('视频生成成功！');
             }
           } else if (result.status === 'FAILURE') {
             setIsGenerating(false);
+            setHasError(true); // 设置错误状态
             if (intervalId) clearInterval(intervalId);
-            setTaskId(null); // 清除taskId，防止重复触发
+            setTaskId(null); // 清除taskId，确保显示错误信息
             toast.error(`视频生成失败: ${result.fail_reason || '未知错误'}`);
           }
         } catch (error) {
           console.error('状态查询错误:', error);
           setIsGenerating(false);
+          setHasError(true); // 设置错误状态
           if (intervalId) clearInterval(intervalId);
-          setTaskId(null); // 清除taskId，防止重复触发
+          setTaskId(null); // 清除taskId，确保显示错误信息
           toast.error(`状态查询失败: ${error instanceof Error ? error.message : '未知错误'}`);
         }
       }, 5000); // 每5秒查询一次
@@ -462,6 +471,7 @@ export default function ImageToVideo() {
       setVeo3SubModel(selectedVideo.veo3SubModel);
       setWatermark(selectedVideo.watermark);
       setSelectedHistoryId(videoId);
+      setHasError(false); // 重置错误状态
       toast.info('已从历史记录加载视频');
     }
   };
@@ -994,27 +1004,6 @@ export default function ImageToVideo() {
                   )}
                 </div>
               </div>
-              
-              {/* 进度条显示 */}
-              {isGenerating && (
-                <div className="mb-6">
-                  <div className="flex justify-between text-sm mb-2">
-                    <span>视频生成中...</span>
-                    <span>{progress}%</span>
-                  </div>
-                  <div className={`w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
-                    <motion.div
-                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
-                      initial={{ width: 0 }}
-                      animate={{ width: `${progress}%` }}
-                      transition={{ duration: 0.5 }}
-                    ></motion.div>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                    视频生成可能需要几分钟时间，请耐心等待...
-                  </p>
-                </div>
-              )}
             </div>
           </div>
           
@@ -1062,49 +1051,6 @@ export default function ImageToVideo() {
                     </div>
                   )}
                 </div>
-              ) : firstFrame || lastFrame ? (
-                <div className="space-y-6">
-                  {/* 首帧和尾帧图片预览 */}
-                  <div>
-                    <h3 className="font-medium mb-2">上传的图片</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* 首帧图片预览 */}
-                      {firstFrame && (
-                        <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center p-4">
-                          <div className="flex flex-col items-center w-full">
-                            <img 
-                              src={firstFrame} 
-                              alt="首帧图片" 
-                              className="max-w-full max-h-32 object-contain mb-2"
-                            />
-                            <p className="text-sm">首帧图片</p>
-                          </div>
-                        </div>
-                      )}
-                      
-                      {/* 尾帧图片预览 */}
-                      {lastFrame && (
-                        <div className="bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex items-center justify-center p-4">
-                          <div className="flex flex-col items-center w-full">
-                            <img 
-                              src={lastFrame} 
-                              alt="尾帧图片" 
-                              className="max-w-full max-h-32 object-contain mb-2"
-                            />
-                            <p className="text-sm">尾帧图片</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  
-                  {isGenerating && (
-                    <div className="text-center py-8">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500 mb-3"></div>
-                      <p className="text-gray-500 dark:text-gray-400">正在生成视频...</p>
-                    </div>
-                  )}
-                </div>
               ) : (
                 <div className={`aspect-video rounded-lg flex flex-col items-center justify-center ${isDark ? 'bg-gray-700' : 'bg-gray-100'}`}>
                   <div className="text-center p-8">
@@ -1116,6 +1062,36 @@ export default function ImageToVideo() {
                       上传首帧和尾帧图片，输入提示词，然后点击"生成视频"按钮开始创建视频内容
                     </p>
                   </div>
+                </div>
+              )}
+              
+              {/* 进度条移到视频预览框下面 */}
+              {isGenerating && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between text-sm mb-2">
+                    <span>视频生成中...</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <div className={`w-full h-2 rounded-full ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
+                    <motion.div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-blue-500"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${progress}%` }}
+                      transition={{ duration: 0.5 }}
+                    ></motion.div>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    视频生成可能需要几分钟时间，请耐心等待...
+                  </p>
+                </div>
+              )}
+              
+              {/* 请求失败后的错误提示 */}
+              {hasError && !isGenerating && (
+                <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <p className="text-red-500 text-center font-medium">
+                    视频生成请求失败，请检查网络连接或API密钥设置后重试
+                  </p>
                 </div>
               )}
             </div>

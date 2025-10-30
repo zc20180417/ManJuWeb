@@ -1,0 +1,38 @@
+{
+  "name": "manju-server",
+  "version": "1.0.0",
+  "description": "Backend server for ManJu project",
+  "main": "dist/app.js",
+  "scripts": {
+    "start": "node dist/app.js",
+    "dev": "ts-node src/app.ts",
+    "build": "tsc",
+    "test": "jest"
+  },
+  "keywords": [
+    "manju",
+    "ai",
+    "image-generation",
+    "video-generation"
+  ],
+  "author": "ManJu Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.5.0",
+    "bull": "^4.11.5",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "mongoose": "^7.5.0",
+    "multer": "^2.0.2",
+    "socket.io": "^4.7.2",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.17",
+    "@types/multer": "^1.4.7",
+    "@types/node": "^20.5.9",
+    "@types/uuid": "^9.0.2",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  }
+}

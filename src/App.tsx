@@ -8,6 +8,7 @@ import VideoCreator from "@/pages/VideoCreator";
 import ProjectDashboard from "@/pages/ProjectDashboard";
 import TextToVideo from "@/pages/TextToVideo";
 import ImageToVideo from "@/pages/ImageToVideo";
+import CreateImage from "@/pages/CreateImage";
 import { useState } from "react";
 import { AuthContext } from '@/contexts/authContext';
 import { ProjectContextProvider } from '@/contexts/projectContext';
@@ -51,6 +52,7 @@ export default function App() {
           <Route path="/script-writer" element={<ScriptWriter />} />
           <Route path="/storyboard" element={<Storyboard />} />
           <Route path="/image-generator" element={<ImageGenerator />} />
+          <Route path="/create-image" element={<CreateImage />} />
           <Route path="/video-creator" element={<VideoCreator />} />
           <Route path="/text-to-video" element={<TextToVideo />} />
           <Route path="/image-to-video" element={<ImageToVideo />} />

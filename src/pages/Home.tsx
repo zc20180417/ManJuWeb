@@ -79,6 +79,14 @@ export default function Home() {
                   <i className="fas fa-tachometer-alt"></i>
                   <span>仪表盘</span>
                 </Link>
+                <Link to="/image-generator" className="hidden md:flex items-center space-x-2 hover:text-purple-500 transition-colors">
+                  <i className="fas fa-paint-brush"></i>
+                  <span>AI绘图</span>
+                </Link>
+                <Link to="/create-image" className="hidden md:flex items-center space-x-2 hover:text-purple-500 transition-colors">
+                  <i className="fas fa-palette"></i>
+                  <span>创建图像</span>
+                </Link>
                 <button 
                   onClick={handleLogout}
                   className="px-4 py-2 rounded-full bg-red-500 text-white hover:bg-red-600 transition-colors shadow-lg shadow-red-500/30"
@@ -178,7 +186,7 @@ export default function Home() {
         </motion.div>
         
         {/* 功能展示卡片 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 max-w-7xl mx-auto w-full">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-6 max-w-7xl mx-auto w-full">
            {[
             {
               icon: 'fa-file-alt',
@@ -200,6 +208,13 @@ export default function Home() {
               description: '根据分镜描述自动生成高质量场景图像',
               color: 'from-green-500 to-emerald-600',
               link: '/image-generator'
+            },
+            {
+              icon: 'fa-paint-brush',
+              title: '创建图像',
+              description: '使用Nano Banana模型创建自定义AI图像',
+              color: 'from-yellow-500 to-amber-600',
+              link: '/create-image'
             },
             {
               icon: 'fa-video',
@@ -268,6 +283,7 @@ export default function Home() {
                 <li><Link to="/script-writer" className="hover:text-purple-500 transition-colors">剧本创作</Link></li>
                 <li><Link to="/storyboard" className="hover:text-purple-500 transition-colors">分镜设计</Link></li>
                 <li><Link to="/image-generator" className="hover:text-purple-500 transition-colors">图像生成</Link></li>
+                <li><Link to="/create-image" className="hover:text-purple-500 transition-colors">创建图像</Link></li>
                 <li><Link to="/video-creator" className="hover:text-purple-500 transition-colors">视频合成</Link></li>
                 <li><Link to="/text-to-video" className="hover:text-purple-500 transition-colors">文生视频</Link></li>
                 <li><Link to="/image-to-video" className="hover:text-purple-500 transition-colors">图生视频</Link></li>
